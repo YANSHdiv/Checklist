@@ -64,13 +64,13 @@ def to_release_type(r: Release) -> ReleaseType:
 @strawberry.type
 class Query:
     @strawberry.field
-    def releases(self, info: Info) -> List[ReleaseType]:
+    def releases(self, info: Info, limit: Optional[int] = 100) -> List[ReleaseType]:
         db = info.context.get("db") if info.context else None
         if db:
-            releases = get_all_releases(db)
+            releases = get_all_releases(db, limit=limit)
             return [to_release_type(r) for r in releases]
         with get_db_context() as session:
-            releases = get_all_releases(session)
+            releases = get_all_releases(session, limit=limit)
             return [to_release_type(r) for r in releases]
 
     @strawberry.field

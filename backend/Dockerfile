@@ -17,5 +17,4 @@ COPY . .
 
 EXPOSE 8000
 
-# High-performance multi-worker configuration with uvloop and httptools
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "uvloop", "--http", "httptools"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-4} --loop uvloop --http httptools"]

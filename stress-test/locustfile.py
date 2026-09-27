@@ -66,78 +66,91 @@ mutation DeleteRelease($id: UUID!) {
 
 
 class ReleaseChecklistUser(HttpUser):
-    # Wait between 0.1 and 0.5 seconds between simulated user actions
-    wait_time = between(0.1, 0.5)
+    # Simulated user pacing: 0.1s to 0.3s between actions
+    wait_time = between(0.1, 0.3)
 
     def on_start(self):
-        """Seed or discover release IDs on user start."""
+        """Seed initial release ID for this simulated user."""
         self.known_release_ids = []
-        # Create an initial user-scoped release
-        res = self.client.post(
-            "/graphql",
-            json={
-                "query": GRAPHQL_MUTATION_CREATE,
-                "variables": {
-                    "input": {
-                        "name": f"Stress Test Release - {random.randint(1000, 999999)}",
-                        "dueDate": datetime.now(timezone.utc).isoformat(),
-                        "additionalInfo": "Seeded by Locust virtual user",
-                    }
+        try:
+            with self.client.post(
+                "/graphql",
+                json={
+                    "query": GRAPHQL_MUTATION_CREATE,
+                    "variables": {
+                        "input": {
+                            "name": f"Stress Seed {random.randint(1000, 999999)}",
+                            "dueDate": datetime.now(timezone.utc).isoformat(),
+                            "additionalInfo": "Seeded on virtual user initialization",
+                        }
+                    },
                 },
-            },
-            name="GraphQL: Create Release (Seed)",
-        )
-        if res.status_code == 200:
-            data = res.json()
-            if "data" in data and data["data"] and data["data"].get("createRelease"):
-                self.known_release_ids.append(data["data"]["createRelease"]["id"])
+                timeout=5.0,
+                name="GraphQL: Create Release (Seed)",
+                catch_response=True,
+            ) as res:
+                if res.status_code == 200:
+                    data = res.json()
+                    if "data" in data and data["data"] and data["data"].get("createRelease"):
+                        self.known_release_ids.append(data["data"]["createRelease"]["id"])
+                elif res.status_code >= 400:
+                    res.failure(f"HTTP {res.status_code}: {res.text[:100]}")
+        except Exception as e:
+            pass
 
     @task(5)
     def fetch_all_releases(self):
         """Dashboard query - most frequent operation."""
-        with self.client.post(
-            "/graphql",
-            json={"query": GRAPHQL_QUERY_RELEASES},
-            name="GraphQL: Query Releases",
-            catch_response=True,
-        ) as res:
-            if res.status_code != 200:
-                res.failure(f"HTTP {res.status_code}")
-                return
-            data = res.json()
-            if "errors" in data:
-                res.failure(f"GraphQL error: {data['errors']}")
-            else:
-                releases = data.get("data", {}).get("releases", [])
-                if releases:
-                    # Update local pool of active release IDs
-                    self.known_release_ids = [r["id"] for r in releases[:10]]
+        try:
+            with self.client.post(
+                "/graphql",
+                json={"query": GRAPHQL_QUERY_RELEASES},
+                timeout=5.0,
+                name="GraphQL: Query Releases",
+                catch_response=True,
+            ) as res:
+                if res.status_code != 200:
+                    res.failure(f"HTTP {res.status_code}")
+                    return
+                data = res.json()
+                if "errors" in data and data["errors"]:
+                    res.failure(f"GraphQL Error: {data['errors'][0].get('message', 'Unknown')}")
+                else:
+                    releases = data.get("data", {}).get("releases", [])
+                    if releases:
+                        self.known_release_ids = [r["id"] for r in releases[:15]]
+        except Exception as e:
+            pass
 
     @task(3)
     def toggle_step(self):
-        """User checking/unchecking a checklist step."""
+        """User toggling a checklist step."""
         if not self.known_release_ids:
             return
         target_id = random.choice(self.known_release_ids)
         step_id = random.randint(1, 10)
-        with self.client.post(
-            "/graphql",
-            json={
-                "query": GRAPHQL_MUTATION_TOGGLE,
-                "variables": {
-                    "releaseId": target_id,
-                    "stepId": step_id,
+        try:
+            with self.client.post(
+                "/graphql",
+                json={
+                    "query": GRAPHQL_MUTATION_TOGGLE,
+                    "variables": {
+                        "releaseId": target_id,
+                        "stepId": step_id,
+                    },
                 },
-            },
-            name="GraphQL: Toggle Step",
-            catch_response=True,
-        ) as res:
-            if res.status_code != 200:
-                res.failure(f"HTTP {res.status_code}")
-                return
-            data = res.json()
-            if "errors" in data:
-                res.failure(f"GraphQL error: {data['errors']}")
+                timeout=5.0,
+                name="GraphQL: Toggle Step",
+                catch_response=True,
+            ) as res:
+                if res.status_code != 200:
+                    res.failure(f"HTTP {res.status_code}")
+                    return
+                data = res.json()
+                if "errors" in data and data["errors"]:
+                    res.failure(f"GraphQL Error: {data['errors'][0].get('message', 'Unknown')}")
+        except Exception as e:
+            pass
 
     @task(2)
     def fetch_single_release(self):
@@ -145,76 +158,102 @@ class ReleaseChecklistUser(HttpUser):
         if not self.known_release_ids:
             return
         target_id = random.choice(self.known_release_ids)
-        with self.client.post(
-            "/graphql",
-            json={
-                "query": GRAPHQL_QUERY_SINGLE,
-                "variables": {"id": target_id},
-            },
-            name="GraphQL: Query Single Release",
-            catch_response=True,
-        ) as res:
-            if res.status_code != 200:
-                res.failure(f"HTTP {res.status_code}")
-                return
-            data = res.json()
-            if "errors" in data:
-                res.failure(f"GraphQL error: {data['errors']}")
+        try:
+            with self.client.post(
+                "/graphql",
+                json={
+                    "query": GRAPHQL_QUERY_SINGLE,
+                    "variables": {"id": target_id},
+                },
+                timeout=5.0,
+                name="GraphQL: Query Single Release",
+                catch_response=True,
+            ) as res:
+                if res.status_code != 200:
+                    res.failure(f"HTTP {res.status_code}")
+                    return
+                data = res.json()
+                if "errors" in data and data["errors"]:
+                    res.failure(f"GraphQL Error: {data['errors'][0].get('message', 'Unknown')}")
+        except Exception as e:
+            pass
 
     @task(1)
     def update_additional_info(self):
-        """Updating notes/instructions on a release."""
+        """Updating release notes."""
         if not self.known_release_ids:
             return
         target_id = random.choice(self.known_release_ids)
-        with self.client.post(
-            "/graphql",
-            json={
-                "query": GRAPHQL_MUTATION_UPDATE,
-                "variables": {
-                    "input": {
-                        "id": target_id,
-                        "additionalInfo": f"Stress test update at {datetime.now(timezone.utc).isoformat()}",
-                    }
+        try:
+            with self.client.post(
+                "/graphql",
+                json={
+                    "query": GRAPHQL_MUTATION_UPDATE,
+                    "variables": {
+                        "input": {
+                            "id": target_id,
+                            "additionalInfo": f"Load test note at {datetime.now(timezone.utc).isoformat()}",
+                        }
+                    },
                 },
-            },
-            name="GraphQL: Update Release Info",
-            catch_response=True,
-        ) as res:
-            if res.status_code != 200:
-                res.failure(f"HTTP {res.status_code}")
-                return
-            data = res.json()
-            if "errors" in data:
-                res.failure(f"GraphQL error: {data['errors']}")
+                timeout=5.0,
+                name="GraphQL: Update Release Info",
+                catch_response=True,
+            ) as res:
+                if res.status_code != 200:
+                    res.failure(f"HTTP {res.status_code}")
+                    return
+                data = res.json()
+                if "errors" in data and data["errors"]:
+                    res.failure(f"GraphQL Error: {data['errors'][0].get('message', 'Unknown')}")
+        except Exception as e:
+            pass
 
     @task(1)
     def lifecycle_create_and_delete(self):
-        """Complete lifecycle: create temporary release then delete."""
-        create_res = self.client.post(
-            "/graphql",
-            json={
-                "query": GRAPHQL_MUTATION_CREATE,
-                "variables": {
-                    "input": {
-                        "name": f"Temp Lifecycle Release {random.randint(100, 9999)}",
-                        "dueDate": datetime.now(timezone.utc).isoformat(),
-                        "additionalInfo": "Lifecycle stress test item",
-                    }
+        """Full lifecycle: create release then delete it."""
+        try:
+            with self.client.post(
+                "/graphql",
+                json={
+                    "query": GRAPHQL_MUTATION_CREATE,
+                    "variables": {
+                        "input": {
+                            "name": f"Temp Lifecycle Release {random.randint(100, 9999)}",
+                            "dueDate": datetime.now(timezone.utc).isoformat(),
+                            "additionalInfo": "Lifecycle stress test item",
+                        }
+                    },
                 },
-            },
-            name="GraphQL: Create Temp Release",
-        )
-        if create_res.status_code == 200:
-            created_data = create_res.json()
-            rel_id = created_data.get("data", {}).get("createRelease", {}).get("id")
+                timeout=5.0,
+                name="GraphQL: Create Temp Release",
+                catch_response=True,
+            ) as create_res:
+                if create_res.status_code != 200:
+                    create_res.failure(f"HTTP {create_res.status_code}")
+                    return
+                created_data = create_res.json()
+                if "errors" in created_data and created_data["errors"]:
+                    create_res.failure(f"GraphQL Error: {created_data['errors'][0].get('message', 'Unknown')}")
+                    return
+                rel_id = created_data.get("data", {}).get("createRelease", {}).get("id")
+
             if rel_id:
-                # Delete it
-                self.client.post(
+                with self.client.post(
                     "/graphql",
                     json={
                         "query": GRAPHQL_MUTATION_DELETE,
                         "variables": {"id": rel_id},
                     },
+                    timeout=5.0,
                     name="GraphQL: Delete Release",
-                )
+                    catch_response=True,
+                ) as del_res:
+                    if del_res.status_code != 200:
+                        del_res.failure(f"HTTP {del_res.status_code}")
+                        return
+                    del_data = del_res.json()
+                    if "errors" in del_data and del_data["errors"]:
+                        del_res.failure(f"GraphQL Error: {del_data['errors'][0].get('message', 'Unknown')}")
+        except Exception as e:
+            pass

@@ -24,6 +24,8 @@ wheels/
 .coverage
 htmlcov/
 venv/
+*.db
+*.sqlite
 .venv/
 ENV/
 

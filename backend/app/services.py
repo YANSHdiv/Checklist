@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from app.models import Release, TOTAL_STEPS
 
 
-def get_all_releases(db: Session) -> List[Release]:
+def get_all_releases(db: Session, limit: Optional[int] = 100) -> List[Release]:
     stmt = select(Release).order_by(Release.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return list(db.scalars(stmt).all())
 
 

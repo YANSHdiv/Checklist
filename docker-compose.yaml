@@ -3,6 +3,7 @@ services:
     image: postgres:16-alpine
     container_name: release_checklist_db
     restart: unless-stopped
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_USER: release_user
       POSTGRES_PASSWORD: release_password
@@ -28,6 +29,10 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://release_user:release_password@postgres:5432/release_db
       CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173
+      WORKERS: "4"
+      DB_POOL_SIZE: "25"
+      DB_MAX_OVERFLOW: "25"
+      DB_POOL_TIMEOUT: "10.0"
     depends_on:
       postgres:
         condition: service_healthy

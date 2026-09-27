@@ -19,11 +19,10 @@ engine_kwargs = {}
 if is_sqlite:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
-    # High-concurrency production connection pool settings
     engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_size"] = 50
-    engine_kwargs["max_overflow"] = 50
-    engine_kwargs["pool_timeout"] = 15
+    engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", "50"))
+    engine_kwargs["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW", "50"))
+    engine_kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "15.0"))
     engine_kwargs["pool_recycle"] = 1800
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
