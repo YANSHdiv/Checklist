@@ -4,15 +4,17 @@ import subprocess
 import csv
 import time
 
-USER_LEVELS = [50, 100, 150, 200, 300, 500]
+DEFAULT_LEVELS = [50, 100, 150, 200, 300, 500]
 RUN_TIME = "20s"
 HOST = "http://localhost:8000"
 
-def run_test(config_name: str):
-    print(f"=== Starting Benchmark Suite: {config_name.upper()} ===")
+def run_test(config_name: str, levels=None):
+    if levels is None:
+        levels = DEFAULT_LEVELS
+    print(f"=== Starting Benchmark Suite: {config_name.upper()} for levels {levels} ===")
     results = []
 
-    for users in USER_LEVELS:
+    for users in levels:
         spawn_rate = max(10, users // 3)
         prefix = f"stress-test/{config_name}_{users}"
         cmd = [
@@ -80,4 +82,7 @@ def run_test(config_name: str):
 
 if __name__ == "__main__":
     config = sys.argv[1] if len(sys.argv) > 1 else "baseline"
-    run_test(config)
+    levels = None
+    if len(sys.argv) > 2:
+        levels = [int(x.strip()) for x in sys.argv[2].split(",") if x.strip()]
+    run_test(config, levels)
